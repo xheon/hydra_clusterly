@@ -20,7 +20,7 @@ def my_app(cfg: DictConfig) -> None:
     env = submitit.JobEnvironment()
     log.info(env)
     log.info(f"Process ID {os.getpid()} executing task {cfg.task}, CWD: {os.getcwd()}, Path: {sys.path}, PYTHONPATH: {os.environ['PYTHONPATH']}")
-    a = 15
+    a = 10
     log.info(f"Value: before=10, after={a}")
     log.info(f"FUNCTION: {Path(inspect.getsourcefile(my_app))}")
 

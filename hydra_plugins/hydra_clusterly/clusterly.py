@@ -4,6 +4,8 @@ import shutil
 import time
 from dataclasses import dataclass
 
+import sysrsync
+
 import logging
 from pathlib import Path
 from typing import Optional, Sequence, Any, List, Dict
@@ -35,8 +37,9 @@ class ClusterlyConf(SlurmQueueConf):
         "hydra_plugins.hydra_clusterly.clusterly.Clusterly"
     )
 
-    # output: Optional[str] = "job_%j.log"
-    # error: Optional[str] = None
+    code_path: Optional[str] = None
+    code_ignores: Optional[List[str]] = None
+    code_ignore_file: Optional[str] = None
 
 
 ConfigStore.instance().store(
@@ -47,7 +50,7 @@ ConfigStore.instance().store(
 class Clusterly(SlurmLauncher):
     def __init__(self, **params) -> None:
         super().__init__(**params)
-        self.code_path: Optional[Path] = None
+        self.code_path = Path(self.params["code_path"])
 
     def setup(
         self,
@@ -64,19 +67,29 @@ class Clusterly(SlurmLauncher):
         common_prefix = Path(os.path.commonpath([task_function_path, config_path]))
         log.info(f"Clusterly: Determined source code path: {common_prefix}")
 
-        self.code_path = Path(config.hydra.run.dir) / "code"
-        # self.code_path.mkdir(exist_ok=True, parents=True)
+        self.code_path.mkdir(exist_ok=True, parents=True)
         log.info(f"Clusterly: Determined destination code path: {self.code_path}")
 
-        log.info("Clusterly: Copy source files...")
-        # iterate over all folders, copy them if not ignored
+        copy_info = f"Clusterly: Copy source files"
 
-        # for element in common_prefix.iterdir():
-        shutil.copytree(common_prefix, self.code_path, dirs_exist_ok=True)
+        # read ignores from file
+        code_ignores = set()
+        if self.params["code_ignores"] is not None:
+            code_ignores.update(self.params["code_ignores"])
+            copy_info += f" excluding {self.params['code_ignores']}"
 
-        # log.info("sleeping...")
-        # time.sleep(5)
-        # log.info("done...")
+        if self.params["code_ignore_file"] is not None:
+            ignore_file = common_prefix / self.params["code_ignore_file"]
+
+            if ignore_file.exists():
+                ignores_from_file = [line.strip() for line in ignore_file.open().readlines()]
+                code_ignores.update(ignores_from_file)
+                copy_info += f" excluding from file \'{self.params['code_ignore_file']}\'"
+
+        log.info(copy_info)
+
+        sysrsync.run(source=str(common_prefix), destination=str(self.code_path), exclusions=code_ignores,
+                     options=["-r"])
 
     def submit_single_job(
             self,
@@ -166,7 +179,7 @@ class Clusterly(SlurmLauncher):
                 if x in specific_init_keys
             }
         )
-        init_keys = specific_init_keys | {"submitit_folder"}
+        init_keys = specific_init_keys | {"submitit_folder", "code_path", "code_ignores", "code_ignore_file"}
         executor = submitit.AutoExecutor(cluster=self._EXECUTOR, **init_params)
 
         # specify resources/parameters

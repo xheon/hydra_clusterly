@@ -22,6 +22,9 @@ hydra:
     qos: normal
     comment: "foo"     # optionally use this to tell others on the cluster what your job is up to
     name: ${project}
+    code_path: ${hydra.run.dir}/code
+    code_ignores: ["build", "dist"]
+    code_ignore_file: ".gitignore"
 
 task: 123
 project: "neural-reconstruction"
