@@ -1,0 +1,27 @@
+defaults:
+  - override hydra/launcher: clusterly
+
+hydra:
+  job_logging:
+    root:
+      leve: DEBUG
+  run: # don't put outputs in HOME, use SCRATCH instead
+    dir: /cluster/ikarus/mdahnert/clusterly-test/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: /cluster/ikarus/mdahnert/clusterly-test/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  launcher:
+#    _target_: hydra_plugins.hydra_clusterly.clusterly.Clusterly
+    submitit_folder: ${hydra.run.dir}/.submitit/
+    gpus_per_task: 0
+    cpus_per_task: 1
+    timeout_min: 5
+    tasks_per_node: 1
+    mem_gb: 1     # don't go nuts
+    max_num_timeout: 0     # increase if you support requeuing / preemption
+    partition: submit
+    qos: normal
+    comment: "foo"     # optionally use this to tell others on the cluster what your job is up to
+    name: ${project}
+
+task: 123
+project: "neural-reconstruction"
