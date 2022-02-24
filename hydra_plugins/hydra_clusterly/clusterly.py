@@ -50,18 +50,21 @@ ConfigStore.instance().store(
 class Clusterly(SlurmLauncher):
     def __init__(self, **params) -> None:
         super().__init__(**params)
-        self.code_path = Path(self.params["code_path"])
+        self.code_path = None
 
-    def setup(
-        self,
-        *,
-        hydra_context: HydraContext,
-        task_function: TaskFunction,
-        config: DictConfig,
-    ) -> None:
-        super().setup(hydra_context=hydra_context,task_function=task_function,config=config)
+        if self.params["code_path"] is not None:
+            self.code_path = Path(self.params["code_path"])
 
-        # Determine common path prefix
+    def setup(self, *, hydra_context: HydraContext, task_function: TaskFunction, config: DictConfig) -> None:
+        super().setup(hydra_context=hydra_context, task_function=task_function, config=config)
+
+        if self.code_path is not None:
+            self.copy_code(task_function)
+        else:
+            log.warning("Clusterly: Code is not copied.")
+
+    def copy_code(self, task_function):
+        # Determine common path prefix.
         task_function_path = Path(inspect.getsourcefile(task_function))  # from task function
         config_path = Path(self.config.hydra.runtime.config_sources[1].path)   # from config
         common_prefix = Path(os.path.commonpath([task_function_path, config_path]))
