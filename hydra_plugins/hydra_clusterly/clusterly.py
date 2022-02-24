@@ -51,6 +51,7 @@ class Clusterly(SlurmLauncher):
     def __init__(self, **params) -> None:
         super().__init__(**params)
         self.code_path = None
+        self.stdout_printer = None
 
         if self.params["code_path"] is not None:
             self.code_path = Path(self.params["code_path"])
@@ -80,7 +81,9 @@ class Clusterly(SlurmLauncher):
 
         if self.params["code_ignores"] is not None:
             code_ignores.update(self.params["code_ignores"])
-            exclude_info.append(f" excluding {self.params['code_ignores']} ({len(self.params['code_ignores'])}) excludes")
+            exclude_info.append(f" excluding {self.params['code_ignores']} "
+                                f"({len(self.params['code_ignores'])}) excludes")
+
         if self.params["code_ignore_file"] is not None:
             ignore_file = common_prefix / self.params["code_ignore_file"]
 
@@ -90,6 +93,7 @@ class Clusterly(SlurmLauncher):
                 code_ignores.update(ignores_from_file)
                 exclude_info.append(f"excluding from file \'{self.params['code_ignore_file']}\' " +
                                     f"({len(ignores_from_file)}) excludes.")
+
         log.info(copy_info + " and ".join(exclude_info))
 
         sysrsync.run(source=str(common_prefix),
@@ -191,20 +195,19 @@ class Clusterly(SlurmLauncher):
 
         if not self.params["wait_for_completion"]:
             log.info(f"Clusterly: Job as {job.job_id} is still running.")
-            # return [JobReturn(_return_value="uncompleted")]
             return []
 
         last_state = job.state
         last_state_change = time.perf_counter()
-        last_position_stdout = 0
 
         if self.params["print_output"]:
-            printer = tailhead.follow_path(job.paths.stdout)
+            self.stdout_printer = tailhead.follow_path(job.paths.stdout)
 
         while not job.done():
             try:
+                # Print out job output
                 if self.params["print_output"]:
-                    next_line = next(printer)
+                    next_line = next(self.stdout_printer)
                     if next_line is not None and next_line != "":
                         lines = next_line.split("\r")
 
@@ -216,9 +219,9 @@ class Clusterly(SlurmLauncher):
                                     print(line, end="\r")
 
                 # Display changes in job status
-                state_has_changed, new_state, last_state_change, delta_seconds = self.check_state_change(job,
-                                                                                                         last_state,
-                                                                                                         last_state_change)
+                state_change_result = self.check_state_change(job, last_state, last_state_change)
+                state_has_changed, new_state, last_state_change, delta_seconds = state_change_result
+
                 if state_has_changed:
                     self.log_state_change(job.job_id, last_state, new_state, delta_seconds)
                     last_state = new_state
@@ -241,9 +244,9 @@ class Clusterly(SlurmLauncher):
                         log.info(f"Exited, job is still running at {job.job_id}")
                         return []
 
+        # Print out job output
         if self.params["print_output"]:
-            # self.print_stdout(job, last_position_stdout)
-            for next_line in printer:
+            for next_line in self.stdout_printer:
                 if next_line == "":
                     break
 
@@ -262,28 +265,6 @@ class Clusterly(SlurmLauncher):
         self.log_state_change(job.job_id, last_state, new_state, time.perf_counter() - last_state_change)
 
         return [job.result()]
-
-    @staticmethod
-    def print_stdout(job: Job, last_position_stdout: int) -> int:
-        stdout_path = job.paths.stdout
-        if stdout_path.exists():
-            with stdout_path.open(encoding='utf-8') as stdout:
-                stdout.seek(last_position_stdout)
-
-                stdout_output = ""
-                try:
-                    stdout_output = stdout.readline()
-                except UnicodeDecodeError:
-                    print("Ignoring DecodeError")
-
-                if stdout_output.strip():
-                    lines_read = len(stdout_output)
-                    last_position_stdout += lines_read
-
-                    if lines_read > 0:
-                        print(stdout_output, end="")
-
-        return last_position_stdout
 
     @staticmethod
     def log_state_change(job_id: str, last_state: str, new_state: str, delta_seconds: float) -> None:
