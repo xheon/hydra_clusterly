@@ -98,12 +98,12 @@ class Clusterly(SlurmLauncher):
                      exclusions=code_ignores,
                      options=["-r"])
 
-    def submit_single_job(
-            self,
-            sweep_overrides: List[str],
+    def submit_job(
+            self, sweep_overrides: List[str],
             job_dir_key: str,
+            job_subdir_key: str,
             job_num: int,
-            job_id: str,
+            _: str,
             singleton_state: Dict[type, Singleton],
     ) -> JobReturn:
         # lazy import to ensure plugin discovery remains fast
@@ -129,52 +129,17 @@ class Clusterly(SlurmLauncher):
             task_function=self.task_function,
             config=sweep_config,
             job_dir_key=job_dir_key,
-            job_subdir_key=job_dir_key,
+            job_subdir_key=job_subdir_key,
         )
 
-    def submit_multi_job(
-        self,
-        sweep_overrides: List[str],
-        job_dir_key: str,
-        job_num: int,
-        job_id: str,
-        singleton_state: Dict[type, Singleton],
-    ) -> JobReturn:
-        # lazy import to ensure plugin discovery remains fast
-        import submitit
-
-        assert self.hydra_context is not None
-        assert self.config is not None
-        assert self.task_function is not None
-
-        Singleton.set_state(singleton_state)
-        setup_globals()
-        sweep_config = self.hydra_context.config_loader.load_sweep_config(
-            self.config, sweep_overrides
-        )
-
-        with open_dict(sweep_config.hydra.job) as job:
-            # Populate new job variables
-            job.id = submitit.JobEnvironment().job_id  # type: ignore
-            sweep_config.hydra.job.num = job_num
-
-        return run_job(
-            hydra_context=self.hydra_context,
-            task_function=self.task_function,
-            config=sweep_config,
-            job_dir_key=job_dir_key,
-            job_subdir_key="hydra.sweep.subdir",
-        )
-
-    def launch(
-        self, job_overrides: Sequence[Sequence[str]], initial_job_idx: int
-    ) -> Sequence[JobReturn]:
+    def launch(self, job_overrides: Sequence[Sequence[str]], initial_job_idx: int) -> Sequence[JobReturn]:
         import submitit
         assert self.config is not None
 
         num_jobs = len(job_overrides)
         assert num_jobs > 0
         params = self.params
+
         # build executor
         init_params = {"folder": self.params["submitit_folder"]}
         specific_init_keys = {"max_num_timeout"}
@@ -204,11 +169,13 @@ class Clusterly(SlurmLauncher):
         else:
             return self.launch_multi_run(executor, job_overrides, initial_job_idx)
 
-    def launch_single_run(self, executor, job_overrides, initial_job_idx):
+    def launch_single_run(self, executor: Executor, job_overrides: Sequence[Sequence[str]],
+                          initial_job_idx: int) -> Sequence[JobReturn]:
         log.info(f"Clusterly: Use '{self._EXECUTOR}', run output dir : {self.config.hydra.run.dir}")
 
         job_params: List[Any] = [
             job_overrides[0],
+            "hydra.run.dir",
             "hydra.run.dir",
             initial_job_idx,
             f"job_id_for_{initial_job_idx}",
@@ -238,13 +205,14 @@ class Clusterly(SlurmLauncher):
                 (
                     list(overrides),
                     "hydra.sweep.dir",
+                    "hydra.sweep.subdir",
                     idx,
                     f"job_id_for_{idx}",
                     Singleton.get_state(),
                 )
             )
 
-        jobs = executor.map_array(self.submit_multi_job, *zip(*job_params))
+        jobs = executor.map_array(self.submit_job, *zip(*job_params))
         for j in jobs:
             log.info(f"Clusterly: Submitting child job of {initial_job_idx}: {j.job_id}")
         return [j.results()[0] for j in jobs]
