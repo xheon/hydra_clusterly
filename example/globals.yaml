@@ -1,0 +1,36 @@
+hydra:
+    job_logging:
+        root:
+            leve: DEBUG
+    run:
+        dir: /cluster/ikarus/mdahnert/clusterly-test/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    sweep:
+        dir: /cluster/ikarus/mdahnert/clusterly-test/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    job:
+        env_set:
+            PYTHONPATH: ${hydra.launcher.code_path}/src
+
+    launcher:
+        submitit_folder: ${hydra.run.dir}/.submitit/
+
+        # slurm config
+        gpus_per_task: 0
+        cpus_per_task: 1
+        timeout_min: 20
+        tasks_per_node: 1
+        mem_gb: 1     # don't go nuts
+        max_num_timeout: 0     # increase if you support requeuing / preemption
+        partition: submit
+        qos: normal
+        comment: "foo"     # optionally use this to tell others on the cluster what your job is up to
+        name: ${project}
+        additional_parameters:  # see https://slurm.schedmd.com/sbatch.html for options
+            exclude: "gondor"
+
+        # clusterly config
+        code_path: ${hydra.run.dir}/code
+        code_ignores: [ "build", "dist" ]
+        code_ignore_file: ".gitignore"
+        print_output: True
+        wait_for_completion: True
+
