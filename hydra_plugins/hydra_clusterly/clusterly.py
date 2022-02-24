@@ -75,23 +75,27 @@ class Clusterly(SlurmLauncher):
 
         copy_info = f"Clusterly: Copy source files"
 
-        # read ignores from file
+        # Read ignores from file.
         code_ignores = set()
+        exclude_info = []
+
         if self.params["code_ignores"] is not None:
             code_ignores.update(self.params["code_ignores"])
-            copy_info += f" excluding {self.params['code_ignores']}"
-
+            exclude_info.append(f" excluding {self.params['code_ignores']} ({len(self.params['code_ignores'])}) excludes")
         if self.params["code_ignore_file"] is not None:
             ignore_file = common_prefix / self.params["code_ignore_file"]
 
             if ignore_file.exists():
-                ignores_from_file = [line.strip() for line in ignore_file.open().readlines()]
+                ignores_from_file = [line.strip() for line in ignore_file.open().readlines() if
+                                     not line.startswith("#") and line.strip() != ""]
                 code_ignores.update(ignores_from_file)
-                copy_info += f" excluding from file \'{self.params['code_ignore_file']}\'"
+                exclude_info.append(f"excluding from file \'{self.params['code_ignore_file']}\' " +
+                                    f"({len(ignores_from_file)}) excludes.")
+        log.info(copy_info + " and ".join(exclude_info))
 
-        log.info(copy_info)
-
-        sysrsync.run(source=str(common_prefix), destination=str(self.code_path), exclusions=code_ignores,
+        sysrsync.run(source=str(common_prefix),
+                     destination=str(self.code_path),
+                     exclusions=code_ignores,
                      options=["-r"])
 
     def submit_single_job(
