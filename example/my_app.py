@@ -1,31 +1,36 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-import inspect
 import logging
 import os
 import sys
 import time
-from pathlib import Path
 
 import hydra
-import submitit
-from omegaconf import DictConfig, OmegaConf
-
 from debuggerly import Debugger
+from omegaconf import DictConfig
+from tqdm import trange
 
 log = logging.getLogger(__name__)
 
 
 @hydra.main(config_path="", config_name="config")
 def my_app(cfg: DictConfig) -> None:
-    env = submitit.JobEnvironment()
-    log.info(env)
-    log.info(f"Process ID {os.getpid()} executing task {cfg.task}, CWD: {os.getcwd()}, Path: {sys.path}, PYTHONPATH: {os.environ['PYTHONPATH']}")
+    log.info(f"Process ID {os.getpid()} executing task {cfg.sample_task}")
+    log.info(f"CWD: {os.getcwd()}")
+    log.info(f"Path: {sys.path}, PYTHONPATH: {os.environ['PYTHONPATH']}")
+
     a = 10
-    log.info(f"Value: before=10, after={a}")
-    log.info(f"FUNCTION: {Path(inspect.getsourcefile(my_app))}")
+    log.info(f"Value: before=10, after={a}\n")
+
+    iterations = 100
+
+    for iteration in trange(iterations, position=0, leave=True):
+        # log.info(f"{iteration}")
+        # tqdm.write(f"{iteration}")
+        time.sleep(0.5)
+
+    time.sleep(1)
+    log.info("Example finished\n")
 
 
 if __name__ == "__main__":
     Debugger()
-    print(os.getcwd())
     my_app()
