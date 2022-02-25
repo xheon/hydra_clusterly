@@ -23,7 +23,8 @@ setup(
         "hydra-core>=1.1.0.dev7",
         "submitit>=1.3.3",
         "hydra-submitit-launcher>=1.1.6",
-        "sysrsync"
+        "sysrsync",
+        "tailhead"
     ],
     include_package_data=True,
 )
