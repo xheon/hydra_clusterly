@@ -2,6 +2,7 @@ import datetime
 import inspect
 import logging
 import os
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -101,6 +102,9 @@ class Clusterly(SlurmLauncher):
                      exclusions=code_ignores,
                      options=["-r"])
 
+        # Append Python path to path variable
+        sys.path.insert(0, str(self.code_path))
+
     def submit_job(
             self, sweep_overrides: List[str],
             job_dir_key: str,
@@ -110,6 +114,9 @@ class Clusterly(SlurmLauncher):
             singleton_state: Dict[type, Singleton],
     ) -> JobReturn:
         # lazy import to ensure plugin discovery remains fast
+        # from debuggerly import Debugger
+        # Debugger()
+
         import submitit
 
         assert self.hydra_context is not None
@@ -139,6 +146,9 @@ class Clusterly(SlurmLauncher):
         import submitit
         assert self.config is not None
 
+        # from debuggerly import Debugger
+        # Debugger()
+
         num_jobs = len(job_overrides)
         assert num_jobs > 0
         params = self.params
@@ -167,7 +177,7 @@ class Clusterly(SlurmLauncher):
             for x, y in params.items()
             if x not in init_keys
         }
-        params["stderr_to_stdout"] = True
+        params["slurm_stderr_to_stdout"] = True
         executor.update_parameters(**params)
 
         # distinguish between single and multi run
@@ -226,7 +236,7 @@ class Clusterly(SlurmLauncher):
                     self.log_state_change(job.job_id, last_state, new_state, delta_seconds)
                     last_state = new_state
 
-                time.sleep(0.2)
+                time.sleep(0.01)
             except KeyboardInterrupt:
                 log.info(f"Output stopped, job is still running at {job.job_id}")
 

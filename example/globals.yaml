@@ -3,12 +3,12 @@ hydra:
         root:
             leve: DEBUG
     run:
-        dir: /cluster/ikarus/mdahnert/clusterly-test/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+        dir: /cluster/ikarus/mdahnert/clusterly-test/${experiment}/${now:%Y-%m-%d}/${now:%H-%M-%S}
     sweep:
-        dir: /cluster/ikarus/mdahnert/clusterly-test/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+        dir: /cluster/ikarus/mdahnert/clusterly-test/${experiment}/${now:%Y-%m-%d}/${now:%H-%M-%S}
     job:
         env_set:
-            PYTHONPATH: ${hydra.launcher.code_path}/src
+            PYTHONPATH: ${hydra:launcher.code_path}/src
 
     launcher:
         submitit_folder: ${hydra.run.dir}/.submitit/

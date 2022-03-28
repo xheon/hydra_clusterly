@@ -4,4 +4,5 @@ defaults:
   - override hydra/launcher: clusterly
 
 sample_task: 123
+experiment: "test123"
 project: "my_clusterly_app"
