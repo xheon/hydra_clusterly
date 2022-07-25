@@ -40,6 +40,7 @@ class ClusterlyConf(SlurmQueueConf):
 
     print_output: bool = False
     wait_for_completion: bool = True
+    sleep_time: float = 0.25
 
 
 # Register as hydra launcher
@@ -53,6 +54,7 @@ class Clusterly(SlurmLauncher):
         super().__init__(**params)
         self.code_path = None
         self.stdout_printer = None
+        self.sleep_time = self.params.get("sleep_time", 0.25)
 
         if self.params["code_path"] is not None:
             self.code_path = Path(self.params["code_path"])
@@ -62,6 +64,8 @@ class Clusterly(SlurmLauncher):
 
         if self.code_path is not None:
             self.copy_code(task_function)
+            with open(self.code_path / "command.txt", "w") as f:
+                f.write(" ".join(sys.argv))
         else:
             log.warning("Clusterly: Code is not copied.")
 
@@ -102,9 +106,6 @@ class Clusterly(SlurmLauncher):
                      exclusions=code_ignores,
                      options=["-r"])
 
-        # Append Python path to path variable
-        sys.path.insert(0, str(self.code_path))
-
     def submit_job(
             self, sweep_overrides: List[str],
             job_dir_key: str,
@@ -116,6 +117,9 @@ class Clusterly(SlurmLauncher):
         # lazy import to ensure plugin discovery remains fast
         # from debuggerly import Debugger
         # Debugger()
+        # Append Python path to path variable
+        sys.path.insert(0, os.environ["PYTHONPATH"])
+
 
         import submitit
 
@@ -148,6 +152,8 @@ class Clusterly(SlurmLauncher):
 
         # from debuggerly import Debugger
         # Debugger()
+        # from debuggerly import Debugger
+        # Debugger(local_ip="tuini15-vc21.vc.in.tum.de", port=12345)
 
         num_jobs = len(job_overrides)
         assert num_jobs > 0
@@ -166,7 +172,7 @@ class Clusterly(SlurmLauncher):
         )
 
         init_keys = specific_init_keys | {"submitit_folder", "code_path", "code_ignores", "code_ignore_file",
-                                          "print_output", "wait_for_completion"}
+                                          "print_output", "wait_for_completion", "sleep_time"}
 
         executor = submitit.AutoExecutor(cluster=self._EXECUTOR, **init_params)
 
@@ -213,20 +219,27 @@ class Clusterly(SlurmLauncher):
         if self.params["print_output"]:
             self.stdout_printer = tailhead.follow_path(job.paths.stdout)
 
+        # from debuggerly import Debugger
+        # Debugger(local_ip="tuini15-vc21.vc.in.tum.de", port=12346)
+
         while not job.done():
             try:
                 # Print out job output
                 if self.params["print_output"]:
                     next_line = next(self.stdout_printer)
-                    if next_line is not None and next_line != "":
-                        lines = next_line.split("\r")
 
-                        if len(lines) == 1:
-                            print(next_line)
-                        else:
-                            for line in lines:
-                                if line != "":
-                                    print(line, end="\r")
+                    while next_line is not None:
+
+                        if next_line is not None and next_line != "":
+                            lines = next_line.split("\r")
+
+                            if len(lines) == 1:
+                                print(next_line)
+                            else:
+                                for line in lines:
+                                    if line != "":
+                                        print(line, end="\r")
+                        next_line = next(self.stdout_printer)
 
                 # Display changes in job status
                 state_change_result = self.check_state_change(job, last_state, last_state_change)
@@ -236,7 +249,7 @@ class Clusterly(SlurmLauncher):
                     self.log_state_change(job.job_id, last_state, new_state, delta_seconds)
                     last_state = new_state
 
-                time.sleep(0.01)
+                time.sleep(self.sleep_time)
             except KeyboardInterrupt:
                 log.info(f"Output stopped, job is still running at {job.job_id}")
 
@@ -255,26 +268,27 @@ class Clusterly(SlurmLauncher):
                         return []
 
         # Print out job output
-        if self.params["print_output"]:
-            for next_line in self.stdout_printer:
-                if next_line == "":
-                    break
-
-                if next_line is not None and next_line != "":
-                    lines = next_line.split("\r")
-
-                    if len(lines) == 1:
-                        print(next_line)
-                    else:
-                        for line in lines[:-1]:
-                            if line != "":
-                                print(line, end="\r")
-                        print(lines[-1])
+        # if self.params["print_output"]:
+        #     for next_line in self.stdout_printer:
+        #         if next_line == "":
+        #             break
+        #
+        #         if next_line is not None and next_line != "":
+        #             lines = next_line.split("\r")
+        #
+        #             if len(lines) == 1:
+        #                 print(next_line)
+        #             else:
+        #                 for line in lines[:-1]:
+        #                     if line != "":
+        #                         print(line, end="\r")
+        #                 print(lines[-1])
         log.info(f"Clusterly: Job {job.job_id} done")
         new_state = job.watcher.get_state(job.job_id, mode="force")
         self.log_state_change(job.job_id, last_state, new_state, time.perf_counter() - last_state_change)
 
         return [job.result()]
+        # return []
 
     @staticmethod
     def log_state_change(job_id: str, last_state: str, new_state: str, delta_seconds: float) -> None:
