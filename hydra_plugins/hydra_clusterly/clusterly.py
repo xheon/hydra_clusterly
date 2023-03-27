@@ -104,7 +104,7 @@ class Clusterly(SlurmLauncher):
         sysrsync.run(source=str(common_prefix),
                      destination=str(self.code_path),
                      exclusions=code_ignores,
-                     options=["-r"])
+                     options=["-r"], verbose=True)
 
     def submit_job(
             self, sweep_overrides: List[str],
@@ -183,7 +183,7 @@ class Clusterly(SlurmLauncher):
             for x, y in params.items()
             if x not in init_keys
         }
-        params["slurm_stderr_to_stdout"] = True
+        params["slurm_stderr_to_stdout"] = False
         executor.update_parameters(**params)
 
         # distinguish between single and multi run
